@@ -1,0 +1,9 @@
+*.pyc
+*/*.pyc
+*/*.xml
+vis/*
+*.pdf
+*.zip
+*.pkl
+*.npy
+*.xml

@@ -1,17 +1,16 @@
 import copy
-import define
-import torch
-import argparse
+
 import matplotlib as mpl
+import torch
+
+from utils import define
+
 mpl.use('Agg')
 mpl.rc('pdf', fonttype=42)
 import matplotlib.pyplot as plt
-import pickle
-import math
-import itertools
 import numpy as np
 import os
-import feature_extractor_gnn as feature_extractor
+import utils.feature_extractor_gnn as feature_extractor
 
 
 class Path(object):
@@ -130,7 +129,7 @@ class Path(object):
     def getReturnTime(self, p):
         end_x, end_y = self.__resource.getInitialPos()
         p_x, p_y = p.getPosition()
-        t = define.dis(end_x, p_x, end_y, p_y)/self.speed
+        t = define.dis(end_x, p_x, end_y, p_y) / self.speed
         return t
 
     def getResourceId(self):

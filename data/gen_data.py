@@ -1,9 +1,11 @@
-import random
-import define
-from resource_obj import Resource
-from work_package import WorkPackage
 import math
+import random
+
 import numpy as np
+
+from utils import define
+from utils.resource_obj import Resource
+from utils.work_package import WorkPackage
 
 
 def generate_data(dataset_size, op_size, prize_type, seed=1234):

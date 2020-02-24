@@ -1,19 +1,17 @@
-import define
-
-from torch import nn
 import torch
+from torch import nn
+
 torch.set_default_tensor_type('torch.FloatTensor')
 import pickle
 import argparse
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset, TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader
 import torch.nn.functional as F
 import numpy as np
 import os
-import math
 import time
 import sys
-import transformer
+from utils import transformer, define
 
 
 class MultiLinear(nn.Module):

@@ -1,24 +1,17 @@
-import math
-import random
+import argparse
+import sys
+import time
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 from torch.distributions import Categorical
-from model_gnn import MultiLinear
-import transformer
-import  random
-import define
-import path_obj
-import matplotlib.pyplot as plt
-import gen_data
-import time
-import schedule_greedy
-import argparse
-import sys
+
+from data import gen_data
+from utils import transformer, define, path_obj
+from utils.model_gnn import MultiLinear
+
 torch.set_default_tensor_type('torch.FloatTensor')
 torch.set_num_threads(40)
 
@@ -84,6 +77,7 @@ class GraphNet(nn.Module):
         value_output = self.value_encoder_layers(output, src_key_padding_mask=src_key_padding_mask).transpose(1,0)
 
         policy_output = self.policylinear(policy_output).squeeze(-1)
+        policy_output = 10 * torch.tanh(policy_output)
         policy_output -= 9999999999 * (1-mask)
         probs = torch.softmax(policy_output, dim=1)
 
@@ -276,7 +270,7 @@ if __name__ == "__main__":
     define.set_value('package_num', args.package_num)
     define.set_value('time_limit', args.time_limit)
     define.set_value('func_type', args.func_type)
-    gen_data.generate_data(100000,args.package_num,args.func_type)
+    gen_data.generate_data(100000, args.package_num, args.func_type)
 
     # if args.device == 'cpu':
     #     torch.set_num_threads(50)
@@ -320,7 +314,7 @@ if __name__ == "__main__":
     if args.test:
         model.eval()
 
-        gen_data.generate_data(100000,args.package_num,args.func_type)
+        gen_data.generate_data(100000, args.package_num, args.func_type)
         device  = torch.device(args.device)
         model.load_state_dict(torch.load('model/model_RL_{}_{}_{}_{}_{}_{}_{}_{}_{}.ckpt'.format(num_steps, args.func_type, num_env, args.hidden_size, args.nhead, args.nlayer, 'xx', args.package_num, args.time_limit)
                                          ,map_location=device))

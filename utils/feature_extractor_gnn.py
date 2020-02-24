@@ -1,14 +1,14 @@
-import resource_obj
-import work_package
-import torch
-import os
-import sys
-import define
-import pickle
 import argparse
-import random
-import numpy as np
+import os
+import pickle
+import sys
 from multiprocessing import Pool, Lock, Value
+
+import numpy as np
+import torch
+
+from utils import define
+
 torch.set_default_tensor_type('torch.FloatTensor')
 torch.set_num_threads(1)
 
@@ -80,7 +80,7 @@ def feature_extractor_base(sample, device):
         gnn_feature[:, i, 1] = p_i[2]
         gnn_feature[i, :, 2] = p_i[3]
         gnn_feature[:, i, 3] = p_i[3]
-        resource_dis[i] = define.dis(p_i[0], resource[1], p_i[1],resource[1])
+        resource_dis[i] = define.dis(p_i[0], resource[1], p_i[1], resource[1])
         for p_j in work_packages:
             j = p_j[5]
             gnn_feature[i, j, 4] = define.dis(p_i[0], p_j[0], p_i[1], p_j[1])
@@ -141,7 +141,7 @@ def feature_extractortt(sample):
     return np.expand_dims(gnn_feature,axis=0), np.expand_dims(mask, axis=0)
 
 def feature_extractorxx(samples, device, feature_base):
-    gnn_features = torch.zeros(len(samples),define.package_num, define.package_num, 7).to(device)
+    gnn_features = torch.zeros(len(samples), define.package_num, define.package_num, 7).to(device)
     gnn_features[:,:, :, :5] = feature_base[0].unsqueeze(0)
     resource_diss = []
     mask2ds = []
@@ -177,7 +177,7 @@ def feature_extractorxx(samples, device, feature_base):
 
 
 def feature_extractor_torch(samples, device, feature_base):
-    gnn_features = torch.zeros(len(samples),define.package_num, define.package_num, 7).to(device)
+    gnn_features = torch.zeros(len(samples), define.package_num, define.package_num, 7).to(device)
     masks = torch.ones(len(samples), define.package_num, define.package_num, 1).to(device)
     for index, sample in enumerate(samples):
         resource, work_packages, total_time = sample
@@ -185,9 +185,9 @@ def feature_extractor_torch(samples, device, feature_base):
 
         gnn_feature = gnn_features[index]
         mask = masks[index]
-        mask2d = torch.ones(define.package_num,1)
+        mask2d = torch.ones(define.package_num, 1)
         dis_vec = torch.zeros(define.package_num, 1, 2)
-        resource_pos = torch.zeros(define.package_num, define.package_num,2).to(device)
+        resource_pos = torch.zeros(define.package_num, define.package_num, 2).to(device)
         resource_pos[:,:,0] = resource[0]
         resource_pos[:,:,1] = resource[1]
 
@@ -221,7 +221,7 @@ def feature_extractor_torch(samples, device, feature_base):
     gnn_features[:,:,:,2:] = (1 - tmp_mask) * tmp + tmp_mask * (2 - torch.exp(1 - tmp))
 
 def feature_extractor_numpy(samples):
-    gnn_features = np.zeros((len(samples),define.package_num, define.package_num, 7))
+    gnn_features = np.zeros((len(samples), define.package_num, define.package_num, 7))
     masks = np.ones((len(samples), define.package_num, define.package_num, 1))
     for index, sample in enumerate(samples):
         resource, work_packages, total_time = sample
@@ -229,9 +229,9 @@ def feature_extractor_numpy(samples):
 
         gnn_feature = gnn_features[index]
         mask = masks[index]
-        mask2d = np.ones((define.package_num,1))
+        mask2d = np.ones((define.package_num, 1))
         dis_vec = np.zeros((define.package_num, 1, 2))
-        resource_pos = np.zeros((define.package_num, define.package_num,2))
+        resource_pos = np.zeros((define.package_num, define.package_num, 2))
         resource_pos[:,:,0] = resource[0]
         resource_pos[:,:,1] = resource[1]
 

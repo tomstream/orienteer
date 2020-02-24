@@ -1,32 +1,27 @@
+import argparse
 import math
-import random
+import time
 
 import numpy as np
-
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import Categorical
-from model_gnn import MultiLinear
-import transformer
-import  random
-import define
-import path_obj
-import matplotlib.pyplot as plt
-import gen_data
-import time
-import schedule_greedy
-import argparse
+import torch.optim as optim
 from scipy.stats import ttest_rel
+from torch.distributions import Categorical
+
+from data import gen_data
+from utils import transformer, define, path_obj
+from utils.model_gnn import MultiLinear
+
 torch.set_default_tensor_type('torch.FloatTensor')
 torch.set_num_threads(1)
 
 
 def extract_feat(resource, work_packages):
-    work_packages = [[p.getX(), p.getY(), p.getUrgency(),p.getWorkingTime(), p.getUrgency()/p.getWorkingTime(), p.getId()] for p in work_packages]
+    work_packages = [[p.getX(), p.getY(), p.getUrgency(),p.getWorkingTime(), p.getUrgency(), p.getId()] for p in work_packages]
     rx, ry, rid = resource.getPosition()
-    gnn_feature = np.zeros((define.package_num + 1, define.package_num + 1, 4))
+    gnn_feature = np.zeros((define.get_value('package_num') + 1, define.get_value('package_num') + 1, 4))
 
     for p_i in work_packages:
         i = p_i[5]
@@ -34,12 +29,12 @@ def extract_feat(resource, work_packages):
             j = p_j[5]
             gnn_feature[i, j, 0] = p_i[2]
             gnn_feature[i, j, 1] = p_j[2]
-            gnn_feature[i, j, 2] = define.dis(p_i[0], p_j[0], p_i[1], p_j[1]) / define.speed + p_j[3]
+            gnn_feature[i, j, 2] = define.dis(p_i[0], p_j[0], p_i[1], p_j[1]) / define.get_value('speed') + p_j[3]
             gnn_feature[i, j, 3] = 1
     for p in work_packages:
         i = p[5]
-        gnn_feature[-1, i, 2] = define.dis(p[0], rx, p[1], ry) / define.speed + p[3]
-        gnn_feature[i, -1, 2] = define.dis(p[0], rx, p[1], ry) / define.speed
+        gnn_feature[-1, i, 2] = define.dis(p[0], rx, p[1], ry) / define.get_value('speed') + p[3]
+        gnn_feature[i, -1, 2] = define.dis(p[0], rx, p[1], ry) / define.get_value('speed')
     return torch.from_numpy(gnn_feature).unsqueeze(0).float()
 
 class GraphNet(nn.Module):
@@ -104,10 +99,11 @@ class GraphNetDecoder(nn.Module):
         self.qlinear = nn.Linear(hidden_size, hidden_size, bias=False)
         self.klinear = nn.Linear(hidden_size, hidden_size, bias=False)
     def forward(self, node_embedding, mask, times, idxc=None):
-        node_avg = torch.mean(node_embedding, dim=1)
+        node_avg = torch.sum(node_embedding * (1-mask.unsqueeze(-1)), dim=1)/torch.sum(1-mask.unsqueeze(-1),dim=1)
         if idxc is None:
             f = self.vf.expand([node_embedding.size(0),-1])
         else:
+            # print(idxc.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.hidden_size).size(), node_embedding.size())
             f = node_embedding.gather(1, idxc.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, self.hidden_size)).squeeze(1)
         emb = self.linear1(torch.cat([node_avg, f, times.unsqueeze(1)], dim=1))
         emb = emb.unsqueeze(0).transpose(0,1)
@@ -118,8 +114,7 @@ class GraphNetDecoder(nn.Module):
         return weight
 
 class Env:
-    def __init__(self, gen_data_func, seed_start, seed_end):
-        self.gen_data_func = gen_data_func
+    def __init__(self, seed_start, seed_end):
         self.range_start = seed_start
         self.range_end = seed_end
         self.count = 0
@@ -127,12 +122,13 @@ class Env:
     def reset(self, i):
         self.seed = self.range_start + i % (self.range_end - self.range_start)
         self.count = (self.count + 1) % (self.range_end - self.range_start)
-        self.packages, self.resources = self.gen_data_func(define.package_num, self.seed)
-        self.mask = torch.zeros(1, define.package_num + 1)
+        self.packages, self.resources = gen_data.wrapper(self.seed)
+        self.mask = torch.zeros(1, define.get_value('package_num') + 1)
         self.mask[0, -1] =1
         self.path = path_obj.Path(self.resources[0], self.packages, None, False, self.device)
         self.reward = 0
         self.times = 0
+        self.done = 0
         return extract_feat(self.resources[0], self.packages).to(device)
     def step(self, action):
         if self.mask[0, action] == 1:
@@ -142,8 +138,9 @@ class Env:
         else:
             package = self.packages[action]
             self.times = self.path.getResourceNeedTime(package) + self.path.getResourceWorkingTime()
-            if self.times + self.path.getReturnTime(package) > define.timeLimit:
+            if self.done == 1 or self.times + self.path.getReturnTime(package) > define.get_value('time_limit'):
                 done = 1
+                self.done = 1
                 reward =0
             else:
                 done = 0
@@ -164,8 +161,8 @@ def compute_returns(next_value, rewards, masks, gamma=0.99):
         returns.insert(0, R)
     return returns
 
-def evaluate(encoder, decoder, gen_data_func, seed_start, num ):
-    envs = Envs(gen_data_func, seed_start, seed_start + num, num)
+def evaluate(encoder, decoder, seed_start, num ):
+    envs = Envs(seed_start, seed_start + num, num)
     encoder.eval()
     decoder.eval()
 
@@ -191,15 +188,63 @@ def evaluate(encoder, decoder, gen_data_func, seed_start, num ):
 
     return sum_rewards.cpu().numpy()
 
+def beam_search(encoder, decoder, beam_size):
+    import copy
+    total_baselines = 0
+    time_start = time.time()
+    for _index in range(0,10000):
+        env = Env(_index, _index+1)
+        beam_list = [[env, 1, 0, 0]]
+        max_rewards = 0
+        state = env.reset(0)
+        envs = Envs([env for env, prob, action, reward in beam_list])
+        emb = encoder(state)
+        first = True
+        while True:
+
+            if first:
+                first = False
+                prob = decoder(emb.expand(len(envs.envs), -1, -1), envs.masks().to(device), envs.times().to(device), None)
+            else:
+                prob = decoder(emb.expand(len(envs.envs), -1, -1), envs.masks().to(device), envs.times().to(device), torch.LongTensor([a for e, p, a, r in beam_list]).to(device))
+
+            prob = prob.cpu().detach().numpy()
+            tmp_list = []
+            for i in range(len(beam_list)):
+                for j in range(define.get_value('package_num')):
+                    if prob[i, j] < 1e-10:
+                        continue
+                    tmp_list.append([beam_list[i][0], beam_list[i][1] * prob[i, j], j, beam_list[i][3]])
+            tmp_list.sort(key = lambda x:x[1], reverse=True)
+            tmp_list = tmp_list[:beam_size]
+            envs = Envs([copy.deepcopy(env) for env, prob, action, r in tmp_list])
+            action = [a for env, prob, a, r in tmp_list]
+            rewards, dones, masks, all_done = envs.step(action)
+
+            beam_list.clear()
+            rewards = rewards.cpu().numpy()
+            for i, (env, prob, a, r) in enumerate(tmp_list):
+                r = r + rewards[i]
+                max_rewards = max(max_rewards, r)
+                beam_list.append([copy.deepcopy(envs.envs[i]), prob, a, r])
+            if np.sum(1 - dones.cpu().numpy()) == 0:
+                break
+        total_baselines += max_rewards
+        print('{} {} {}'.format(_index, total_baselines/(_index+1), (time.time()-time_start)/(_index+1)))
+
+
 def step_func(args):
     env, action = args
     ret = env.step(action)
     return env, ret
 
 class Envs:
-    def __init__(self, gen_data_func, seed_start, seed_end, num_env):
-        num_seed = (seed_end - seed_start) // num_env
-        self.envs = [Env(gen_data_func, seed_start + i * num_seed, seed_start + (i+1) * num_seed) for i in range(0, num_env)]
+    def __init__(self, seed_start, seed_end=None, num_env=None):
+        if seed_end != None:
+            num_seed = (seed_end - seed_start) // num_env
+            self.envs = [Env(seed_start + i * num_seed, seed_start + (i+1) * num_seed) for i in range(0, num_env)]
+        else:
+            self.envs = seed_start
     def reset(self, i):
         ret = []
         for env in self.envs:
@@ -234,12 +279,50 @@ if __name__ == "__main__":
     parser.add_argument("--nlayer", type=int, default=3, help='generate RL sample or IL sample')
     parser.add_argument("--mode", type=str, default='uniform', help='generate RL sample or IL sample')
     parser.add_argument("--ntest", type=int, default=300, help='generate RL sample or IL sample')
+    parser.add_argument("--test", action='store_true', help='generate RL sample or IL sample')
+    parser.add_argument("--package-num", type=int, help='generate RL sample or IL sample')
+    parser.add_argument("--batch-size", type=int, default=100, help='generate RL sample or IL sample')
+    parser.add_argument("--time-limit", type=float, help='generate RL sample or IL sample')
+    parser.add_argument("--duel-dqn", action='store_true', help='generate RL sample or IL sample')
+    parser.add_argument("--double-dqn", action='store_true', help='generate RL sample or IL sample')
+    parser.add_argument("--beam", action='store_true', help='generate RL sample or IL sample')
+    parser.add_argument("--func-type", type=str, default='uniform', help='generate RL sample or IL sample')
+    parser.add_argument("--fn", type=str, default='')
     args = parser.parse_args()
+
     define.init()
+    define.set_value('package_num', args.package_num)
+    define.set_value('time_limit', args.time_limit)
+    define.set_value('func_type', args.func_type)
+    gen_data.generate_data(100000, args.package_num, args.func_type)
 
     device  = torch.device(args.device)
     encoder = GraphNet( hidden_size=args.hidden_size, n_head=args.nhead, nlayers=args.nlayer).to(device)
     decoder = GraphNetDecoder(hidden_size=args.hidden_size).to(device)
+
+    if args.beam:
+        encoder.load_state_dict(
+            torch.load('model/model_att_encoder_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
+                       , map_location=device))
+        decoder.load_state_dict(
+            torch.load('model/model_att_decoder_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
+                       , map_location=device))
+        encoder.eval()
+        decoder.eval()
+        gen_data.generate_data(10000, args.package_num, args.func_type)
+
+        beam_search(encoder, decoder, 100)
+
+    if args.test:
+        encoder.load_state_dict(torch.load('model/model_att_encoder_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
+                                         ,map_location=device))
+        decoder.load_state_dict(torch.load('model/model_att_decoder_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
+                                         ,map_location=device))
+        total_baselines = 0
+        for i in range(10000 // args.batch_size):
+            total_baselines += np.sum(evaluate(encoder, decoder, i * args.batch_size, args.batch_size))
+            print('{} {}'.format(i, total_baselines / (i + 1) / args.batch_size))
+        exit()
 
     encoder_old = encoder
     decoder_old = decoder
@@ -253,15 +336,11 @@ if __name__ == "__main__":
     time_last = time.time()
 
     performance = []
+    print(num_env)
 
-    if args.mode == 'uniform':
-        gen_data_func = gen_data.gen_random_data
-    else:
-        gen_data_func = gen_data.gen_random_dis
+    envs = Envs(11000,90000, num_env)
 
-    envs = Envs(gen_data_func, 0,1000, num_env)
-
-    old_result = evaluate(encoder_old, decoder_old, gen_data_func, 100000, args.ntest)
+    old_result = evaluate(encoder_old, decoder_old, 10000, args.ntest)
 
 
     for _i in range(max_step):
@@ -336,18 +415,29 @@ if __name__ == "__main__":
         if _i % 50 == 0:
             # encoder_old.load_state_dict(encoder.state_dict())
             # decoder_old.load_state_dict(decoder.state_dict())
-            ret_c = evaluate(encoder, decoder, gen_data_func, 100000, args.ntest)
+            ret_c = evaluate(encoder, decoder, 10000, args.ntest)
             mean_c = np.mean(ret_c)
             mean_o = np.mean(old_result)
-            print(mean_c, mean_o)
-            if mean_c < mean_o:
+            print('att', args.package_num, args.func_type, mean_c, mean_o)
+            if mean_c - mean_o < 0.01:
                 continue
             t, p = ttest_rel(old_result, ret_c)
             p_val = p / 2  # one-sided
             assert t < 0, "T-statistic should be negative"
             print("p-value: {}".format(p_val))
+
             if p_val < 0.05:
                 print('Update baseline')
                 encoder_old.load_state_dict(encoder.state_dict())
                 decoder_old.load_state_dict(decoder.state_dict())
-                old_result = evaluate(encoder_old, decoder_old, gen_data_func, 100000, args.ntest)
+                torch.save(encoder_old.state_dict(),'model/model_att_encoder_{}_{}.ckpt'.format(
+                    define.get_value('package_num'), args.func_type))
+                torch.save(decoder_old.state_dict(),'model/model_att_decoder_{}_{}.ckpt'.format(
+                    define.get_value('package_num'), args.func_type))
+                # encoder.load_state_dict(torch.load(
+                #     'model/model_att_encoder_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
+                #     , map_location=device))
+                # decoder.load_state_dict(torch.load(
+                #     'model/model_att_decoder_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
+                #     , map_location=device))
+                old_result = evaluate(encoder_old, decoder_old, 10000, args.ntest)

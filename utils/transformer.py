@@ -1,18 +1,20 @@
-import torch
 import copy
 import warnings
+
+import torch
 from torch.nn import functional as F
-from torch.nn.modules.module import Module
+from torch.nn.init import constant_
+from torch.nn.init import xavier_normal_
+from torch.nn.init import xavier_uniform_
 from torch.nn.modules.container import ModuleList
 from torch.nn.modules.dropout import Dropout
 from torch.nn.modules.linear import Linear
+from torch.nn.modules.module import Module
 from torch.nn.modules.normalization import LayerNorm
-from torch.nn.modules import BatchNorm1d
-from torch.nn.init import xavier_uniform_
-from torch.nn.init import constant_
-from torch.nn.init import xavier_normal_
 from torch.nn.parameter import Parameter
-import my_functional
+
+from utils import my_functional
+
 
 class MultiheadAttention(Module):
     r"""Allows the model to jointly attend to information

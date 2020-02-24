@@ -1,26 +1,19 @@
-import math
-import random
+import argparse
+import pickle
+import  random
+import time
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 from torch.distributions import Categorical
-from model_gnn import MultiLinear
-import transformer
-import  random
-import define
-import path_obj
-import matplotlib.pyplot as plt
-import gen_data
-import time
-import schedule_greedy
-import argparse
-from memory import ReplayMemory
-import DQN
-import pickle
+
+from data import gen_data
+from utils import transformer, define, path_obj
+from utils.memory import ReplayMemory
+from utils.model_gnn import MultiLinear
+
 torch.set_default_tensor_type('torch.FloatTensor')
 
 
@@ -356,7 +349,7 @@ if __name__ == '__main__':
         model = model.to(device)
         total_baselines = 0
         ret = []
-        gen_data.generate_data(10000,args.package_num,args.func_type)
+        gen_data.generate_data(10000, args.package_num, args.func_type)
         for i in range(50):
             ret.append(evaluate_batch(model, i, 1))
         pickle.dump(ret, open('solution/dqn_greedy.pkl', 'wb'))
@@ -364,7 +357,7 @@ if __name__ == '__main__':
 
 
     if not args.test:
-        gen_data.generate_data(100000,args.package_num,args.func_type)
+        gen_data.generate_data(100000, args.package_num, args.func_type)
 
         device  = torch.device(args.device)
         eval_net = GraphNet( hidden_size=args.hidden_size, n_head=args.nhead, nlayers=args.nlayer, duel_dqn=args.duel_dqn, n_gat_head=args.n_gat_head).to(device)
@@ -431,13 +424,13 @@ if __name__ == '__main__':
             #     print('average performance on {}{} {}: {:.4f}, time: {:.4f}, step: {}'.format(args.func_type,args.package_num, _i, performance[-1], time_now - time_last, learn_step_counter//q_network_iteration))
             #     time_last = time_now
             if (_i) % 50 == 0:
-                torch.save(eval_net.state_dict(), 'model/model_dqn{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.ckpt'.format(args.fn, _i+1, define.get_value('package_num'), args.func_type, num_env, args.hidden_size, args.nhead, args.nlayer, 'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla'))
+                torch.save(eval_net.state_dict(), 'model/model_dqn{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.ckpt'.format(args.fn, _i + 1, define.get_value('package_num'), args.func_type, num_env, args.hidden_size, args.nhead, args.nlayer, 'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla'))
                 torch.save(eval_net.state_dict(), 'model/model_dqn{}_{}_{}_{}_{}_{}_{}_{}_{}.ckpt'.format(args.fn, define.get_value('package_num'), args.func_type, num_env, args.hidden_size, args.nhead, args.nlayer, 'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla'))
                 # np.save('result/performance{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(args.fn, args.func_type, define.get_value('package_num'), num_env, args.hidden_size, args.nhead, args.nlayer,'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla'), performance)
-                np.save('result/performance{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(args.fn, args.func_type, define.get_value('package_num'), num_env, args.hidden_size, args.nhead, args.nlayer,'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla'), performance)
+                np.save('result/performance{}_{}_{}_{}_{}_{}_{}_{}_{}'.format(args.fn, args.func_type, define.get_value('package_num'), num_env, args.hidden_size, args.nhead, args.nlayer, 'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla'), performance)
                 print('#####dump######')
     else:
-        gen_data.generate_data(100000,args.package_num,args.func_type)
+        gen_data.generate_data(100000, args.package_num, args.func_type)
         device  = torch.device(args.device)
         model = GraphNet( hidden_size=args.hidden_size, n_head=args.nhead, nlayers=args.nlayer, duel_dqn=args.duel_dqn)
         model.load_state_dict(torch.load('model/model_dqn{}_{}_{}_{}_{}_{}_{}_{}_{}.ckpt'.format(args.fn, define.get_value('package_num'), args.func_type, args.num_env, args.hidden_size, args.nhead, args.nlayer, 'double' if args.double_dqn else 'vanilla', 'duel' if args.duel_dqn else 'vanilla')

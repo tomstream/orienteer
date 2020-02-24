@@ -1,24 +1,20 @@
-from work_package import WorkPackage
-from resource_obj import Resource
-from schedule_policy import Schedule as SchedulePolicy
-from schedule import Schedule
-from path_obj import Path
-import copy
-import define
-import gen_data
-from memory import ReplayMemory
-import random
-import time
-import pickle
-import torch
-import model_gnn
-import A2C
 import argparse
 import os
-import numpy as np
+import pickle
 import sys
-import DQN
+import time
 from multiprocessing import Pool, Lock, Value
+
+import numpy as np
+import torch
+
+import DQN
+from baselines import A2C
+from data import gen_data
+from schedule_prize import Schedule
+from schedule_learn import Schedule as SchedulePolicy
+from utils import model_gnn, define
+
 
 def load():
     return pickle.load(open('/Users/liuzongtao/data/rl-data/synthesis_data.pkl', 'rb'))
@@ -174,7 +170,7 @@ if __name__ == '__main__':
     define.set_value('time_limit', args.time_limit)
     define.set_value('time_interval', args.time_interval)
     define.set_value('func_type', args.func_type)
-    gen_data.generate_data(10000,args.package_num,args.func_type)
+    gen_data.generate_data(10000, args.package_num, args.func_type)
 
     if args.mode == 'no':
         pool = Pool(args.pool_num)

@@ -1,18 +1,16 @@
-import math
 import copy
-import queue
-import time
-import memory
-import define
-from path_obj import Path
 import json
+import math
+import queue
+
 import torch
-import feature_extractor_gnn as feature_extractor
-import numpy as np
-import local_search
+
+from utils import define
+from utils.path_obj import Path
+
 
 class Schedule(object):
-    def __init__(self, resources, workpackages, replay_memory, net=None, is_dqn=False, time_limit=480, plan_limit=100, time_interval=60,global_plan_limit=define.globalPlanLimit, device='cuda:0',
+    def __init__(self, resources, workpackages, replay_memory, net=None, is_dqn=False, time_limit=480, plan_limit=100, time_interval=60, global_plan_limit=define.globalPlanLimit, device='cuda:0',
                  batch_size = 10, data=None):
         self.__totalUrgency = 0
         self.__paths = []

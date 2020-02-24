@@ -1,24 +1,12 @@
-import math
-import random
+import argparse
 
 import numpy as np
-
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
 from torch.distributions import Categorical
-from model_gnn import MultiLinear
-import transformer
-import  random
-import define
-import path_obj
-import matplotlib.pyplot as plt
-import gen_data
-import time
-import schedule_greedy
-import argparse
-from scipy.stats import ttest_rel
+
+from data import gen_data
+from utils import define, path_obj
+
 torch.set_default_tensor_type('torch.FloatTensor')
 torch.set_num_threads(1)
 
@@ -35,7 +23,7 @@ class Env:
         self.seed = self.range_start + i % (self.range_end - self.range_start)
         self.count = (self.count + 1) % (self.range_end - self.range_start)
         self.packages, self.resources = gen_data.wrapper(self.seed)
-        self.mask = torch.zeros(1, define.get_value('package_num')+ 1)
+        self.mask = torch.zeros(1, define.get_value('package_num') + 1)
         self.mask[0, -1] =1
         self.path = path_obj.Path(self.resources[0], self.packages, None, False, self.device)
         self.reward = 0

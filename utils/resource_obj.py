@@ -1,5 +1,7 @@
 import math
-import define
+
+from utils import define
+
 
 class Resource(object):
     def __init__(self, id = None, x = None, y = None, timeLimit = None, speed = None):

@@ -1,24 +1,18 @@
-import math
-import random
+import argparse
+import time
 
 import numpy as np
-
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import Categorical
-from model_gnn import MultiLinear
-import transformer
-import  random
-import define
-import path_obj
-import matplotlib.pyplot as plt
-import gen_data
-import time
-import schedule_greedy
-import argparse
+import torch.optim as optim
 from scipy.stats import ttest_rel
+from torch.distributions import Categorical
+
+from data import gen_data
+from utils import transformer, define, path_obj
+from utils.model_gnn import MultiLinear
+
 torch.set_default_tensor_type('torch.FloatTensor')
 torch.set_num_threads(1)
 
@@ -34,7 +28,7 @@ def extract_feat(resource, work_packages):
             j = p_j[5]
             gnn_feature[i, j, 0] = p_i[2]
             gnn_feature[i, j, 1] = p_j[2]
-            gnn_feature[i, j, 2] = define.dis(p_i[0], p_j[0], p_i[1], p_j[1]) / define.get_value('speed')+ p_j[3]
+            gnn_feature[i, j, 2] = define.dis(p_i[0], p_j[0], p_i[1], p_j[1]) / define.get_value('speed') + p_j[3]
             gnn_feature[i, j, 3] = 1
     for p in work_packages:
         i = p[5]
@@ -131,7 +125,7 @@ class Env:
         self.seed = self.range_start + i % (self.range_end - self.range_start)
         self.count = (self.count + 1) % (self.range_end - self.range_start)
         self.packages, self.resources = gen_data.wrapper(self.seed)
-        self.mask = torch.zeros(1, define.get_value('package_num')+ 1)
+        self.mask = torch.zeros(1, define.get_value('package_num') + 1)
         self.mask[0, -1] =1
         self.path = path_obj.Path(self.resources[0], self.packages, None, False, self.device)
         self.reward = 0
@@ -309,9 +303,9 @@ if __name__ == "__main__":
     decoder = GraphNetDecoder(hidden_size=args.hidden_size).to(device)
 
     if args.beam:
-        encoder.load_state_dict(torch.load('model/model_encoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'),args.func_type)
+        encoder.load_state_dict(torch.load('model/model_encoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
                                          ,map_location=device))
-        decoder.load_state_dict(torch.load('model/model_decoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'),args.func_type)
+        decoder.load_state_dict(torch.load('model/model_decoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
                                          ,map_location=device))
         encoder.eval()
         decoder.eval()
@@ -321,9 +315,9 @@ if __name__ == "__main__":
         beam_search(encoder, decoder, 100)
 
     if args.test:
-        encoder.load_state_dict(torch.load('model/model_encoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'),args.func_type)
+        encoder.load_state_dict(torch.load('model/model_encoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
                                          ,map_location=device))
-        decoder.load_state_dict(torch.load('model/model_decoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'),args.func_type)
+        decoder.load_state_dict(torch.load('model/model_decoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
                                          ,map_location=device))
         total_baselines = 0
         for i in range(10000 // args.batch_size):
@@ -440,8 +434,10 @@ if __name__ == "__main__":
                 encoder_old.load_state_dict(encoder.state_dict())
                 decoder_old.load_state_dict(decoder.state_dict())
                 old_result = evaluate(encoder_old, decoder_old, 10000, args.ntest)
-                torch.save(encoder_old.state_dict(), 'model/model_encoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type))
-                torch.save(decoder_old.state_dict(), 'model/model_decoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type))
+                torch.save(encoder_old.state_dict(), 'model/model_encoder_pn_{}_{}.ckpt'.format(
+                    define.get_value('package_num'), args.func_type))
+                torch.save(decoder_old.state_dict(), 'model/model_decoder_pn_{}_{}.ckpt'.format(
+                    define.get_value('package_num'), args.func_type))
                 encoder_old.load_state_dict(torch.load(
                     'model/model_encoder_pn_{}_{}.ckpt'.format(define.get_value('package_num'), args.func_type)
                     , map_location=device))
